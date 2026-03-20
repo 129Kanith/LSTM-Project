@@ -2,8 +2,20 @@ import pandas as pd
 import numpy as np
 import joblib
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import LSTM
 from core import sequence_builder
 import config
+
+# Patch LSTM to support older models (TF < 2.16) in Keras 3
+original_lstm_from_config = LSTM.from_config
+
+@classmethod
+def patched_lstm_from_config(cls, config):
+    if "time_major" in config:
+        config.pop("time_major")
+    return original_lstm_from_config(config)
+
+LSTM.from_config = patched_lstm_from_config
 
 # Define standardized attack labels
 ATTACK_LABELS = {
@@ -26,10 +38,12 @@ PROTOCOL_MAP = {"tcp": 0, "udp": 1, "icmp": 2}
 
 class threatInference:
     def __init__(self, model_path=None, scaler_path=None):
+        import os
+        base_dir = os.path.dirname(os.path.abspath(__file__))
         if model_path is None:
-            model_path = f"models/lstm_{config.MODEL_VERSION}.h5"
+            model_path = os.path.join(base_dir, "models", f"lstm_{config.MODEL_VERSION}.h5")
         if scaler_path is None:
-            scaler_path = "models/scaler_v1.pkl"
+            scaler_path = os.path.join(base_dir, "models", "scaler_v1.pkl")
             
         print(f"Loading model: {model_path}")
         self.model = load_model(model_path)
